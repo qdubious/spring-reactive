@@ -13,29 +13,24 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.springframework.web.reactive.view;
+
+package org.springframework.web.reactive.result.view;
 
 import java.util.ArrayList;
-import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.Optional;
 
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
-import reactor.core.publisher.Flux;
+import reactor.core.publisher.Mono;
 
 import org.springframework.context.ApplicationContext;
 import org.springframework.context.ApplicationContextAware;
-import org.springframework.core.io.buffer.DataBuffer;
-import org.springframework.core.io.buffer.DataBufferAllocator;
-import org.springframework.core.io.buffer.DefaultDataBufferAllocator;
 import org.springframework.http.MediaType;
 import org.springframework.ui.ModelMap;
 import org.springframework.util.Assert;
 import org.springframework.web.reactive.HandlerResult;
-import org.springframework.web.reactive.View;
 import org.springframework.web.server.ServerWebExchange;
 
 /**
@@ -49,8 +44,6 @@ public abstract class AbstractView implements View, ApplicationContextAware {
 
 
 	private final List<MediaType> mediaTypes = new ArrayList<>(4);
-
-	private DataBufferAllocator bufferAllocator = new DefaultDataBufferAllocator();
 
 	private ApplicationContext applicationContext;
 
@@ -80,23 +73,6 @@ public abstract class AbstractView implements View, ApplicationContextAware {
 		return this.mediaTypes;
 	}
 
-	/**
-	 * Configure the {@link DataBufferAllocator} to use for write I/O.
-	 * <p>By default this is set to {@link DefaultDataBufferAllocator}.
-	 * @param bufferAllocator the allocator to use
-	 */
-	public void setBufferAllocator(DataBufferAllocator bufferAllocator) {
-		Assert.notNull(bufferAllocator, "'bufferAllocator' is required.");
-		this.bufferAllocator = bufferAllocator;
-	}
-
-	/**
-	 * Return the configured buffer allocator, never {@code null}.
-	 */
-	public DataBufferAllocator getBufferAllocator() {
-		return this.bufferAllocator;
-	}
-
 	@Override
 	public void setApplicationContext(ApplicationContext applicationContext) {
 		this.applicationContext = applicationContext;
@@ -113,18 +89,18 @@ public abstract class AbstractView implements View, ApplicationContextAware {
 	 * @param contentType the content type selected to render with which should
 	 * match one of the {@link #getSupportedMediaTypes() supported media types}.
 	 * @param exchange the current exchange
-	 * @return
+	 * @return {@code Mono} to represent when and if rendering succeeds
 	 */
 	@Override
-	public Flux<DataBuffer> render(HandlerResult result, Optional<MediaType> contentType,
+	public Mono<Void> render(HandlerResult result, MediaType contentType,
 			ServerWebExchange exchange) {
 
 		if (logger.isTraceEnabled()) {
 			logger.trace("Rendering view with model " + result.getModel());
 		}
 
-		if (contentType.isPresent()) {
-			exchange.getResponse().getHeaders().setContentType(contentType.get());
+		if (contentType != null) {
+			exchange.getResponse().getHeaders().setContentType(contentType);
 		}
 
 		Map<String, Object> mergedModel = getModelAttributes(result, exchange);
@@ -153,8 +129,9 @@ public abstract class AbstractView implements View, ApplicationContextAware {
 	 * @param renderAttributes combined output Map (never {@code null}),
 	 * with dynamic values taking precedence over static attributes
 	 * @param exchange current exchange
+	 * @return {@code Mono} to represent when and if rendering succeeds
 	 */
-	protected abstract Flux<DataBuffer> renderInternal(Map<String, Object> renderAttributes,
+	protected abstract Mono<Void> renderInternal(Map<String, Object> renderAttributes,
 			ServerWebExchange exchange);
 
 

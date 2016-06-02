@@ -13,7 +13,8 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.springframework.web.reactive.view;
+
+package org.springframework.web.reactive.result.view;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -21,11 +22,8 @@ import java.util.List;
 import org.springframework.context.ApplicationContext;
 import org.springframework.context.ApplicationContextAware;
 import org.springframework.core.Ordered;
-import org.springframework.core.io.buffer.DataBufferAllocator;
-import org.springframework.core.io.buffer.DefaultDataBufferAllocator;
 import org.springframework.http.MediaType;
 import org.springframework.util.Assert;
-import org.springframework.web.reactive.ViewResolver;
 
 /**
  * Base class for {@code ViewResolver} implementations with shared properties.
@@ -33,14 +31,12 @@ import org.springframework.web.reactive.ViewResolver;
  * @author Rossen Stoyanchev
  * @since 4.3
  */
-public abstract class ViewResolverSupport implements ViewResolver, ApplicationContextAware, Ordered {
+public abstract class ViewResolverSupport implements ApplicationContextAware, Ordered {
 
 	public static final MediaType DEFAULT_CONTENT_TYPE = MediaType.parseMediaType("text/html;charset=UTF-8");
 
 
 	private List<MediaType> mediaTypes = new ArrayList<>(4);
-
-	private DataBufferAllocator bufferAllocator = new DefaultDataBufferAllocator();
 
 	private ApplicationContext applicationContext;
 
@@ -69,23 +65,6 @@ public abstract class ViewResolverSupport implements ViewResolver, ApplicationCo
 	 */
 	public List<MediaType> getSupportedMediaTypes() {
 		return this.mediaTypes;
-	}
-
-	/**
-	 * Configure the {@link DataBufferAllocator} to use for write I/O.
-	 * <p>By default this is set to {@link DefaultDataBufferAllocator}.
-	 * @param bufferAllocator the allocator to use
-	 */
-	public void setBufferAllocator(DataBufferAllocator bufferAllocator) {
-		Assert.notNull(bufferAllocator, "'bufferAllocator' is required.");
-		this.bufferAllocator = bufferAllocator;
-	}
-
-	/**
-	 * Return the configured buffer allocator, never {@code null}.
-	 */
-	public DataBufferAllocator getBufferAllocator() {
-		return this.bufferAllocator;
 	}
 
 	@Override

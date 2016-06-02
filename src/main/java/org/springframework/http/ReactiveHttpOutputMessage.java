@@ -22,7 +22,7 @@ import org.reactivestreams.Publisher;
 import reactor.core.publisher.Mono;
 
 import org.springframework.core.io.buffer.DataBuffer;
-import org.springframework.core.io.buffer.DataBufferAllocator;
+import org.springframework.core.io.buffer.DataBufferFactory;
 
 /**
  * A "reactive" HTTP output message that accepts output as a {@link Publisher}.
@@ -31,6 +31,7 @@ import org.springframework.core.io.buffer.DataBufferAllocator;
  * on the server-side.
  *
  * @author Arjen Poutsma
+ * @author Sebastien Deleuze
  */
 public interface ReactiveHttpOutputMessage extends HttpMessage {
 
@@ -41,19 +42,21 @@ public interface ReactiveHttpOutputMessage extends HttpMessage {
 	void beforeCommit(Supplier<? extends Mono<Void>> action);
 
 	/**
-	 * Set the body of the message to the given {@link Publisher} which will be
-	 * used to write to the underlying HTTP layer.
+	 * Use the given {@link Publisher} to write the body of the message to the underlying
+	 * HTTP layer, and flush the data when the complete signal is received (data could be
+	 * flushed before depending on the configuration, the HTTP engine and the amount of
+	 * data sent).
 	 *
 	 * @param body the body content publisher
 	 * @return a publisher that indicates completion or error.
 	 */
-	Mono<Void> setBody(Publisher<DataBuffer> body);
+	Mono<Void> writeWith(Publisher<DataBuffer> body);
 
 	/**
-	 * Returns a {@link DataBufferAllocator} that can be used for creating the body.
-	 * @return a buffer allocator
-	 * @see #setBody(Publisher)
+	 * Returns a {@link DataBufferFactory} that can be used for creating the body.
+	 * @return a buffer factory
+	 * @see #writeWith(Publisher)
 	 */
-	DataBufferAllocator allocator();
+	DataBufferFactory bufferFactory();
 
 }

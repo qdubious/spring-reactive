@@ -29,7 +29,7 @@ import reactor.core.publisher.Mono;
 import reactor.io.netty.http.HttpChannel;
 
 import org.springframework.core.io.buffer.DataBuffer;
-import org.springframework.core.io.buffer.DataBufferAllocator;
+import org.springframework.core.io.buffer.DataBufferFactory;
 import org.springframework.core.io.buffer.NettyDataBuffer;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseCookie;
@@ -48,8 +48,8 @@ public class ReactorServerHttpResponse extends AbstractServerHttpResponse
 	private final HttpChannel channel;
 
 	public ReactorServerHttpResponse(HttpChannel response,
-			DataBufferAllocator allocator) {
-		super(allocator);
+			DataBufferFactory dataBufferFactory) {
+		super(dataBufferFactory);
 		Assert.notNull("'response' must not be null.");
 		this.channel = response;
 	}
@@ -65,7 +65,7 @@ public class ReactorServerHttpResponse extends AbstractServerHttpResponse
 	}
 
 	@Override
-	protected Mono<Void> setBodyInternal(Publisher<DataBuffer> publisher) {
+	protected Mono<Void> writeWithInternal(Publisher<DataBuffer> publisher) {
 		return this.channel.send(Flux.from(publisher).map(this::toByteBuf));
 	}
 
@@ -105,7 +105,7 @@ public class ReactorServerHttpResponse extends AbstractServerHttpResponse
 	}
 
 	@Override
-	public Mono<Void> setBody(File file, long position, long count) {
+	public Mono<Void> writeWith(File file, long position, long count) {
 		return applyBeforeCommit().then(() -> {
 			return this.channel.sendFile(file, position, count);
 		});

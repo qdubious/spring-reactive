@@ -20,6 +20,7 @@ import java.io.InputStream;
 import java.io.OutputStream;
 import java.nio.ByteBuffer;
 import java.util.Arrays;
+import java.util.function.IntPredicate;
 
 import io.netty.buffer.ByteBuf;
 import io.netty.buffer.ByteBufInputStream;
@@ -32,13 +33,13 @@ import org.springframework.util.ObjectUtils;
 
 /**
  * Implementation of the {@code DataBuffer} interface that wraps a Netty {@link ByteBuf}.
- * Typically constructed using the {@link NettyDataBufferAllocator}.
+ * Typically constructed using the {@link NettyDataBufferFactory}.
  *
  * @author Arjen Poutsma
  */
 public class NettyDataBuffer implements PooledDataBuffer {
 
-	private final NettyDataBufferAllocator allocator;
+	private final NettyDataBufferFactory dataBufferFactory;
 
 	private ByteBuf byteBuf;
 
@@ -46,17 +47,17 @@ public class NettyDataBuffer implements PooledDataBuffer {
 	 * Creates a new {@code NettyDataBuffer} based on the given {@code ByteBuff}.
 	 * @param byteBuf the buffer to base this buffer on
 	 */
-	NettyDataBuffer(ByteBuf byteBuf, NettyDataBufferAllocator allocator) {
+	NettyDataBuffer(ByteBuf byteBuf, NettyDataBufferFactory dataBufferFactory) {
 		Assert.notNull(byteBuf, "'byteBuf' must not be null");
-		Assert.notNull(allocator, "'allocator' must not be null");
+		Assert.notNull(dataBufferFactory, "'dataBufferFactory' must not be null");
 
 		this.byteBuf = byteBuf;
-		this.allocator = allocator;
+		this.dataBufferFactory = dataBufferFactory;
 	}
 
 	@Override
-	public NettyDataBufferAllocator allocator() {
-		return allocator;
+	public NettyDataBufferFactory factory() {
+		return this.dataBufferFactory;
 	}
 
 	/**
@@ -68,8 +69,15 @@ public class NettyDataBuffer implements PooledDataBuffer {
 	}
 
 	@Override
-	public byte get(int index) {
-		return this.byteBuf.getByte(index);
+	public int indexOf(IntPredicate predicate) {
+		IntPredicate negated = predicate.negate();
+		return this.byteBuf.forEachByte(negated::test);
+	}
+
+	@Override
+	public int lastIndexOf(IntPredicate predicate) {
+		IntPredicate negated = predicate.negate();
+		return this.byteBuf.forEachByteDesc(negated::test);
 	}
 
 	@Override
@@ -167,6 +175,12 @@ public class NettyDataBuffer implements PooledDataBuffer {
 	}
 
 	@Override
+	public DataBuffer slice(int index, int length) {
+		ByteBuf slice = this.byteBuf.slice(index, length);
+		return new NettyDataBuffer(slice, this.dataBufferFactory);
+	}
+
+	@Override
 	public ByteBuffer asByteBuffer() {
 		return this.byteBuf.nioBuffer();
 	}
@@ -183,8 +197,7 @@ public class NettyDataBuffer implements PooledDataBuffer {
 
 	@Override
 	public PooledDataBuffer retain() {
-		this.byteBuf.retain();
-		return this;
+		return new NettyDataBuffer(this.byteBuf.retain(), dataBufferFactory);
 	}
 
 	@Override

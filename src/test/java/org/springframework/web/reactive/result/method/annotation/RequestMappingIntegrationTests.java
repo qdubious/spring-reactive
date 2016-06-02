@@ -53,8 +53,8 @@ import org.springframework.core.convert.support.ReactiveStreamsToRxJava1Converte
 import org.springframework.core.io.ClassPathResource;
 import org.springframework.core.io.Resource;
 import org.springframework.core.io.buffer.DataBuffer;
-import org.springframework.core.io.buffer.DataBufferAllocator;
-import org.springframework.core.io.buffer.DefaultDataBufferAllocator;
+import org.springframework.core.io.buffer.DataBufferFactory;
+import org.springframework.core.io.buffer.DefaultDataBufferFactory;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.RequestEntity;
@@ -75,16 +75,20 @@ import org.springframework.web.bind.annotation.ResponseBody;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.client.RestTemplate;
 import org.springframework.web.reactive.DispatcherHandler;
-import org.springframework.web.reactive.ViewResolver;
 import org.springframework.web.reactive.result.SimpleResultHandler;
-import org.springframework.web.reactive.view.ViewResolverResultHandler;
-import org.springframework.web.reactive.view.freemarker.FreeMarkerConfigurer;
-import org.springframework.web.reactive.view.freemarker.FreeMarkerViewResolver;
+import org.springframework.web.reactive.result.view.ViewResolutionResultHandler;
+import org.springframework.web.reactive.result.view.ViewResolver;
+import org.springframework.web.reactive.result.view.freemarker.FreeMarkerConfigurer;
+import org.springframework.web.reactive.result.view.freemarker.FreeMarkerViewResolver;
 import org.springframework.web.server.adapter.WebHttpHandlerBuilder;
 
-import static org.junit.Assert.*;
+import static org.junit.Assert.assertArrayEquals;
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertTrue;
+
 
 /**
+ * Integration tests with {@code @RequestMapping} methods.
  * @author Rossen Stoyanchev
  * @author Sebastien Deleuze
  * @author Stephane Maldini
@@ -380,9 +384,6 @@ public class RequestMappingIntegrationTests extends AbstractHttpHandlerIntegrati
 	@SuppressWarnings("unused")
 	static class FrameworkConfig {
 
-		private DataBufferAllocator allocator = new DefaultDataBufferAllocator();
-
-
 		@Bean
 		public RequestMappingHandlerMapping handlerMapping() {
 			return new RequestMappingHandlerMapping();
@@ -406,40 +407,28 @@ public class RequestMappingIntegrationTests extends AbstractHttpHandlerIntegrati
 
 		@Bean
 		public ResponseBodyResultHandler responseBodyResultHandler() {
-			List<HttpMessageConverter<?>> converters =
-					Arrays.asList(new ResourceHttpMessageConverter(),
-							new CodecHttpMessageConverter<ByteBuffer>(
-									new ByteBufferEncoder(), new ByteBufferDecoder()),
-							new CodecHttpMessageConverter<String>(new StringEncoder(),
-									new StringDecoder()),
-							new CodecHttpMessageConverter<Object>(
-									new JacksonJsonEncoder(), new JacksonJsonDecoder()));
-			ResponseBodyResultHandler resultHandler =
-					new ResponseBodyResultHandler(converters, conversionService());
-			resultHandler.setOrder(1);
-			return resultHandler;
+			List<HttpMessageConverter<?>> converters = Arrays.asList(
+					new ResourceHttpMessageConverter(),
+					new CodecHttpMessageConverter<>(new ByteBufferEncoder(), new ByteBufferDecoder()),
+					new CodecHttpMessageConverter<>(new StringEncoder(), new StringDecoder()),
+					new CodecHttpMessageConverter<>(new JacksonJsonEncoder(), new JacksonJsonDecoder()));
+			return new ResponseBodyResultHandler(converters, conversionService());
 		}
 
 		@Bean
 		public SimpleResultHandler simpleHandlerResultHandler() {
-			SimpleResultHandler resultHandler = new SimpleResultHandler(conversionService());
-			resultHandler.setOrder(2);
-			return resultHandler;
+			return new SimpleResultHandler(conversionService());
 		}
 
 		@Bean
-		public ViewResolverResultHandler viewResolverResultHandler() {
+		public ViewResolutionResultHandler viewResolverResultHandler() {
 			List<ViewResolver> resolvers = Collections.singletonList(freeMarkerViewResolver());
-			ViewResolverResultHandler resultHandler = new ViewResolverResultHandler(resolvers, conversionService());
-			resultHandler.setOrder(3);
-			return resultHandler;
+			return new ViewResolutionResultHandler(resolvers, conversionService());
 		}
 
 		@Bean
 		public ViewResolver freeMarkerViewResolver() {
-			FreeMarkerViewResolver viewResolver = new FreeMarkerViewResolver("", ".ftl");
-			viewResolver.setBufferAllocator(this.allocator);
-			return viewResolver;
+			return new FreeMarkerViewResolver("", ".ftl");
 		}
 
 		@Bean
@@ -491,9 +480,9 @@ public class RequestMappingIntegrationTests extends AbstractHttpHandlerIntegrati
 
 		@RequestMapping("/raw")
 		public Publisher<ByteBuffer> rawResponseBody() {
-			DataBufferAllocator allocator = new DefaultDataBufferAllocator();
+			DataBufferFactory dataBufferFactory = new DefaultDataBufferFactory();
 			JacksonJsonEncoder encoder = new JacksonJsonEncoder();
-			return encoder.encode(Mono.just(new Person("Robert")), allocator,
+			return encoder.encode(Mono.just(new Person("Robert")), dataBufferFactory,
 					ResolvableType.forClass(Person.class), MediaType.APPLICATION_JSON).map(DataBuffer::asByteBuffer);
 		}
 
@@ -572,7 +561,7 @@ public class RequestMappingIntegrationTests extends AbstractHttpHandlerIntegrati
 
 		@RequestMapping("/stream-create")
 		public Publisher<Void> streamCreate(@RequestBody Flux<Person> personStream) {
-			return personStream.toList().doOnSuccess(persons::addAll).then();
+			return personStream.asList().doOnSuccess(persons::addAll).then();
 		}
 
 		@RequestMapping("/person-capitalize")

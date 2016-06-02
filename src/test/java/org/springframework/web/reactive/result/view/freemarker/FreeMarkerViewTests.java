@@ -13,21 +13,18 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.springframework.web.reactive.view.freemarker;
+package org.springframework.web.reactive.result.view.freemarker;
 
 import java.net.URI;
 import java.nio.ByteBuffer;
 import java.nio.charset.Charset;
-import java.util.HashMap;
 import java.util.Locale;
-import java.util.Optional;
 
 import freemarker.template.Configuration;
 import org.junit.Before;
 import org.junit.Rule;
 import org.junit.Test;
 import org.junit.rules.ExpectedException;
-import reactor.core.publisher.Flux;
 import reactor.core.test.TestSubscriber;
 
 import org.springframework.context.ApplicationContextException;
@@ -39,18 +36,14 @@ import org.springframework.http.server.reactive.MockServerHttpRequest;
 import org.springframework.http.server.reactive.MockServerHttpResponse;
 import org.springframework.ui.ExtendedModelMap;
 import org.springframework.ui.ModelMap;
-import org.springframework.web.context.WebApplicationContext;
 import org.springframework.web.reactive.HandlerResult;
 import org.springframework.web.server.ServerWebExchange;
 import org.springframework.web.server.adapter.DefaultServerWebExchange;
 import org.springframework.web.server.session.DefaultWebSessionManager;
 import org.springframework.web.server.session.WebSessionManager;
 
-import static org.hamcrest.CoreMatchers.containsString;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
-import static org.mockito.BDDMockito.given;
-import static org.mockito.Mockito.mock;
 
 /**
  * @author Rossen Stoyanchev
@@ -63,6 +56,8 @@ public class FreeMarkerViewTests {
 
 
 	private ServerWebExchange exchange;
+
+	private MockServerHttpResponse response;
 
 	private GenericApplicationContext context;
 
@@ -87,7 +82,7 @@ public class FreeMarkerViewTests {
 		fv.setApplicationContext(this.context);
 
 		MockServerHttpRequest request = new MockServerHttpRequest(HttpMethod.GET, new URI("/path"));
-		MockServerHttpResponse response = new MockServerHttpResponse();
+		this.response = new MockServerHttpResponse();
 		WebSessionManager manager = new DefaultWebSessionManager();
 		this.exchange = new DefaultServerWebExchange(request, response, manager);
 	}
@@ -131,13 +126,13 @@ public class FreeMarkerViewTests {
 		ModelMap model = new ExtendedModelMap();
 		model.addAttribute("hello", "hi FreeMarker");
 		HandlerResult result = new HandlerResult(new Object(), "", ResolvableType.NONE, model);
-		Flux<DataBuffer> flux = view.render(result, Optional.empty(), this.exchange);
+		view.render(result, null, this.exchange);
 
-		TestSubscriber<DataBuffer> subscriber = new TestSubscriber<>();
-		subscriber.bindTo(flux).assertValuesWith(dataBuffer ->
+		TestSubscriber
+				.subscribe(this.response.getBody())
+				.assertValuesWith(dataBuffer ->
 					assertEquals("<html><body>hi FreeMarker</body></html>", asString(dataBuffer)));
 	}
-
 
 
 	private static String asString(DataBuffer dataBuffer) {

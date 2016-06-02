@@ -25,7 +25,7 @@ import org.reactivestreams.Publisher;
 import reactor.core.publisher.Mono;
 
 import org.springframework.core.io.buffer.DataBuffer;
-import org.springframework.core.io.buffer.DataBufferAllocator;
+import org.springframework.core.io.buffer.DataBufferFactory;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.ResponseCookie;
 import org.springframework.util.Assert;
@@ -55,19 +55,19 @@ public abstract class AbstractServerHttpResponse implements ServerHttpResponse {
 
 	private final List<Supplier<? extends Mono<Void>>> beforeCommitActions = new ArrayList<>(4);
 
-	private final DataBufferAllocator allocator;
+	private final DataBufferFactory dataBufferFactory;
 
-	public AbstractServerHttpResponse(DataBufferAllocator allocator) {
-		Assert.notNull(allocator, "'allocator' must not be null");
+	public AbstractServerHttpResponse(DataBufferFactory dataBufferFactory) {
+		Assert.notNull(dataBufferFactory, "'dataBufferFactory' must not be null");
 
-		this.allocator = allocator;
+		this.dataBufferFactory = dataBufferFactory;
 		this.headers = new HttpHeaders();
 		this.cookies = new LinkedMultiValueMap<String, ResponseCookie>();
 	}
 
 	@Override
-	public final DataBufferAllocator allocator() {
-		return this.allocator;
+	public final DataBufferFactory bufferFactory() {
+		return this.dataBufferFactory;
 	}
 
 	@Override
@@ -89,9 +89,9 @@ public abstract class AbstractServerHttpResponse implements ServerHttpResponse {
 	}
 
 	@Override
-	public Mono<Void> setBody(Publisher<DataBuffer> publisher) {
+	public Mono<Void> writeWith(Publisher<DataBuffer> publisher) {
 		return new ChannelSendOperator<>(publisher, writePublisher ->
-						applyBeforeCommit().then(() -> setBodyInternal(writePublisher)));
+						applyBeforeCommit().then(() -> writeWithInternal(writePublisher)));
 	}
 
 	protected Mono<Void> applyBeforeCommit() {
@@ -128,9 +128,9 @@ public abstract class AbstractServerHttpResponse implements ServerHttpResponse {
 
 	/**
 	 * Implement this method to write to the underlying the response.
-	 * @param publisher the publisher to write with
+	 * @param body the publisher to write with
 	 */
-	protected abstract Mono<Void> setBodyInternal(Publisher<DataBuffer> publisher);
+	protected abstract Mono<Void> writeWithInternal(Publisher<DataBuffer> body);
 
 	@Override
 	public void beforeCommit(Supplier<? extends Mono<Void>> action) {

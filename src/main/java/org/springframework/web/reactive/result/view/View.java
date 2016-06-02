@@ -13,15 +13,17 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.springframework.web.reactive;
+package org.springframework.web.reactive.result.view;
 
 import java.util.List;
 import java.util.Optional;
 
 import reactor.core.publisher.Flux;
+import reactor.core.publisher.Mono;
 
 import org.springframework.core.io.buffer.DataBuffer;
 import org.springframework.http.MediaType;
+import org.springframework.web.reactive.HandlerResult;
 import org.springframework.web.server.ServerWebExchange;
 
 /**
@@ -41,7 +43,7 @@ import org.springframework.web.server.ServerWebExchange;
 public interface View {
 
 	/**
-	 * Return the list of media types this encoder supports.
+	 * Return the list of media types this View supports, or an empty list.
 	 */
 	List<MediaType> getSupportedMediaTypes();
 
@@ -52,8 +54,8 @@ public interface View {
 	 * @param contentType the content type selected to render with which should
 	 * match one of the {@link #getSupportedMediaTypes() supported media types}.
 	 * @param exchange the current exchange
-	 * @return the output stream
+	 * @return {@code Mono} to represent when and if rendering succeeds
 	 */
-	Flux<DataBuffer> render(HandlerResult result, Optional<MediaType> contentType, ServerWebExchange exchange);
+	Mono<Void> render(HandlerResult result, MediaType contentType, ServerWebExchange exchange);
 
 }

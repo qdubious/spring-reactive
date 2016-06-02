@@ -13,7 +13,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.springframework.web.reactive.view.freemarker;
+package org.springframework.web.reactive.result.view.freemarker;
 
 import java.io.FileNotFoundException;
 import java.io.IOException;
@@ -30,13 +30,14 @@ import freemarker.template.SimpleHash;
 import freemarker.template.Template;
 import freemarker.template.Version;
 import reactor.core.publisher.Flux;
+import reactor.core.publisher.Mono;
 
 import org.springframework.beans.BeansException;
 import org.springframework.beans.factory.BeanFactoryUtils;
 import org.springframework.beans.factory.NoSuchBeanDefinitionException;
 import org.springframework.context.ApplicationContextException;
 import org.springframework.core.io.buffer.DataBuffer;
-import org.springframework.web.reactive.view.AbstractUrlBasedView;
+import org.springframework.web.reactive.result.view.AbstractUrlBasedView;
 import org.springframework.web.server.ServerWebExchange;
 
 /**
@@ -156,26 +157,26 @@ public class FreeMarkerView extends AbstractUrlBasedView {
 	}
 
 	@Override
-	protected Flux<DataBuffer> renderInternal(Map<String, Object> renderAttributes, ServerWebExchange exchange) {
+	protected Mono<Void> renderInternal(Map<String, Object> renderAttributes, ServerWebExchange exchange) {
 		// Expose all standard FreeMarker hash models.
 		SimpleHash freeMarkerModel = getTemplateModel(renderAttributes, exchange);
 		if (logger.isDebugEnabled()) {
 			logger.debug("Rendering FreeMarker template [" + getUrl() + "].");
 		}
 		Locale locale = Locale.getDefault(); // TODO
-		DataBuffer dataBuffer = getBufferAllocator().allocateBuffer();
+		DataBuffer dataBuffer = exchange.getResponse().bufferFactory().allocateBuffer();
 		try {
 			Writer writer = new OutputStreamWriter(dataBuffer.asOutputStream());
 			getTemplate(locale).process(freeMarkerModel, writer);
 		}
 		catch (IOException ex) {
 			String message = "Could not load FreeMarker template for URL [" + getUrl() + "]";
-			return Flux.error(new IllegalStateException(message, ex));
+			return Mono.error(new IllegalStateException(message, ex));
 		}
 		catch (Throwable ex) {
-			return Flux.error(ex);
+			return Mono.error(ex);
 		}
-		return Flux.just(dataBuffer);
+		return exchange.getResponse().writeWith(Flux.just(dataBuffer));
 	}
 
 	/**

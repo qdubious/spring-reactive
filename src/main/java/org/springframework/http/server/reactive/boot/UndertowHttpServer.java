@@ -19,8 +19,8 @@ package org.springframework.http.server.reactive.boot;
 import io.undertow.Undertow;
 import io.undertow.server.HttpHandler;
 
-import org.springframework.core.io.buffer.DataBufferAllocator;
-import org.springframework.core.io.buffer.DefaultDataBufferAllocator;
+import org.springframework.core.io.buffer.DataBufferFactory;
+import org.springframework.core.io.buffer.DefaultDataBufferFactory;
 import org.springframework.http.server.reactive.UndertowHttpHandlerAdapter;
 import org.springframework.util.Assert;
 
@@ -31,20 +31,20 @@ public class UndertowHttpServer extends HttpServerSupport implements HttpServer 
 
 	private Undertow server;
 
-	private DataBufferAllocator allocator = new DefaultDataBufferAllocator();
+	private DataBufferFactory dataBufferFactory = new DefaultDataBufferFactory();
 
 	private boolean running;
 
-	public void setAllocator(DataBufferAllocator allocator) {
-		this.allocator = allocator;
+	public void setDataBufferFactory(DataBufferFactory dataBufferFactory) {
+		this.dataBufferFactory = dataBufferFactory;
 	}
 
 	@Override
 	public void afterPropertiesSet() throws Exception {
 		Assert.notNull(getHttpHandler());
-		HttpHandler handler = new UndertowHttpHandlerAdapter(getHttpHandler(), allocator);
-		int port = (getPort() != -1 ? getPort() : 8080);
-		this.server = Undertow.builder().addHttpListener(port, "localhost")
+		HttpHandler handler =
+				new UndertowHttpHandlerAdapter(getHttpHandler(), dataBufferFactory);
+		this.server = Undertow.builder().addHttpListener(getPort(), getHost())
 				.setHandler(handler).build();
 	}
 

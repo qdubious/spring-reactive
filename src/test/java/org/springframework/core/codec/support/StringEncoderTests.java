@@ -27,6 +27,7 @@ import reactor.core.test.TestSubscriber;
 
 import org.springframework.core.ResolvableType;
 import org.springframework.core.io.buffer.AbstractDataBufferAllocatingTestCase;
+import org.springframework.core.io.buffer.support.DataBufferUtils;
 import org.springframework.http.MediaType;
 
 import static org.junit.Assert.assertFalse;
@@ -58,14 +59,16 @@ public class StringEncoderTests extends AbstractDataBufferAllocatingTestCase {
 	@Test
 	public void write() throws InterruptedException {
 		Flux<String> output = Flux.from(
-				this.encoder.encode(Flux.just("foo"), this.allocator, null, null))
+				this.encoder.encode(Flux.just("foo"), this.dataBufferFactory, null, null))
 						.map(chunk -> {
-			byte[] b = new byte[chunk.readableByteCount()];
-			chunk.read(b);
-			return new String(b, StandardCharsets.UTF_8);
+							byte[] b = new byte[chunk.readableByteCount()];
+							chunk.read(b);
+							DataBufferUtils.release(chunk);
+							return new String(b, StandardCharsets.UTF_8);
 		});
-		TestSubscriber<String> testSubscriber = new TestSubscriber<>();
-		testSubscriber.bindTo(output).assertValues("foo");
+		TestSubscriber
+				.subscribe(output)
+				.assertValues("foo");
 	}
 
 }

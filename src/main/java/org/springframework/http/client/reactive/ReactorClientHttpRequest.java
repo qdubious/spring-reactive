@@ -28,10 +28,9 @@ import reactor.core.publisher.Mono;
 import reactor.io.netty.http.HttpClient;
 
 import org.springframework.core.io.buffer.DataBuffer;
-import org.springframework.core.io.buffer.DataBufferAllocator;
-import org.springframework.core.io.buffer.DefaultDataBufferAllocator;
+import org.springframework.core.io.buffer.DataBufferFactory;
+import org.springframework.core.io.buffer.DefaultDataBufferFactory;
 import org.springframework.core.io.buffer.NettyDataBuffer;
-import org.springframework.core.io.buffer.NettyDataBufferAllocator;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpMethod;
 
@@ -43,7 +42,7 @@ import org.springframework.http.HttpMethod;
  */
 public class ReactorClientHttpRequest extends AbstractClientHttpRequest {
 
-	private final DataBufferAllocator allocator;
+	private final DataBufferFactory dataBufferFactory;
 
 	private final HttpMethod httpMethod;
 
@@ -56,16 +55,16 @@ public class ReactorClientHttpRequest extends AbstractClientHttpRequest {
 
 	public ReactorClientHttpRequest(HttpMethod httpMethod, URI uri, HttpClient httpClient, HttpHeaders headers) {
 		super(headers);
-		//FIXME use Netty allocator
-		this.allocator = new DefaultDataBufferAllocator();
+		//FIXME use Netty factory
+		this.dataBufferFactory = new DefaultDataBufferFactory();
 		this.httpMethod = httpMethod;
 		this.uri = uri;
 		this.httpClient = httpClient;
 	}
 
 	@Override
-	public DataBufferAllocator allocator() {
-		return this.allocator;
+	public DataBufferFactory bufferFactory() {
+		return this.dataBufferFactory;
 	}
 
 	@Override
@@ -90,7 +89,7 @@ public class ReactorClientHttpRequest extends AbstractClientHttpRequest {
 	 * @see #execute()
 	 */
 	@Override
-	public Mono<Void> setBody(Publisher<DataBuffer> body) {
+	public Mono<Void> writeWith(Publisher<DataBuffer> body) {
 
 		this.body = Flux.from(body).map(this::toByteBuf);
 		return Mono.empty();
@@ -121,8 +120,8 @@ public class ReactorClientHttpRequest extends AbstractClientHttpRequest {
 									return channel.sendHeaders();
 								}
 							});
-				})
-				.map(httpChannel -> new ReactorClientHttpResponse(httpChannel, allocator));
+				}).map(httpChannel -> new ReactorClientHttpResponse(httpChannel,
+				dataBufferFactory));
 	}
 
 	private ByteBuf toByteBuf(DataBuffer buffer) {

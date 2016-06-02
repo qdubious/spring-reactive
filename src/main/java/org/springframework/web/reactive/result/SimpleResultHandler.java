@@ -42,13 +42,10 @@ import org.springframework.web.server.ServerWebExchange;
  */
 public class SimpleResultHandler implements Ordered, HandlerResultHandler {
 
-	private int order = Ordered.LOWEST_PRECEDENCE;
-
 	private ConversionService conversionService;
 
+	private int order = Ordered.LOWEST_PRECEDENCE;
 
-	public SimpleResultHandler() {
-	}
 
 	public SimpleResultHandler(ConversionService conversionService) {
 		Assert.notNull(conversionService, "'conversionService' is required.");
@@ -56,6 +53,13 @@ public class SimpleResultHandler implements Ordered, HandlerResultHandler {
 	}
 
 
+	/**
+	 * Set the order for this result handler relative to others.
+	 * <p>By default this is set to {@link Ordered#LOWEST_PRECEDENCE} and is
+	 * generally safe to use late in the order since it looks specifically for
+	 * {@code void} or async return types parameterized by {@code void}.
+	 * @param order the order
+	 */
 	public void setOrder(int order) {
 		this.order = order;
 	}
@@ -69,18 +73,14 @@ public class SimpleResultHandler implements Ordered, HandlerResultHandler {
 	@Override
 	public boolean supports(HandlerResult result) {
 		ResolvableType type = result.getReturnValueType();
-		return (type != null && (Void.TYPE.equals(type.getRawClass()) || isConvertibleToVoidPublisher(type)));
-	}
-
-	private boolean isConvertibleToVoidPublisher(ResolvableType type) {
-		return (isConvertibleToPublisher(type) &&
-				Void.class.isAssignableFrom(type.getGeneric(0).getRawClass()));
-	}
-
-	private boolean isConvertibleToPublisher(ResolvableType type) {
-		Class<?> clazz = type.getRawClass();
-		return (Publisher.class.isAssignableFrom(clazz) ||
-				((this.conversionService != null) && this.conversionService.canConvert(clazz, Publisher.class)));
+		if (Void.TYPE.equals(type.getRawClass())) {
+			return true;
+		}
+		if (this.conversionService.canConvert(type.getRawClass(), Publisher.class)) {
+			Class<?> clazz = result.getReturnValueType().getGeneric(0).getRawClass();
+			return Void.class.equals(clazz);
+		}
+		return false;
 	}
 
 	@SuppressWarnings("unchecked")

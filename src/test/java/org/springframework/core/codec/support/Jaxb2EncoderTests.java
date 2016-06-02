@@ -70,11 +70,12 @@ public class Jaxb2EncoderTests extends AbstractDataBufferAllocatingTestCase {
 	@Test
 	public void encode() {
 		Flux<Pojo> source = Flux.just(new Pojo("foofoo", "barbar"), new Pojo("foofoofoo", "barbarbar"));
-		Flux<DataBuffer> output = this.encoder
-				.encode(source, this.allocator, ResolvableType.forClass(Pojo.class),
+		Flux<DataBuffer> output = this.encoder.encode(source, this.dataBufferFactory,
+				ResolvableType.forClass(Pojo.class),
 						MediaType.APPLICATION_XML);
-		TestSubscriber<DataBuffer> testSubscriber = new TestSubscriber<>();
-		testSubscriber.bindTo(output).assertValuesWith(dataBuffer -> {
+		TestSubscriber
+				.subscribe(output)
+				.assertValuesWith(dataBuffer -> {
 			try {
 				String s = DataBufferTestUtils
 						.dumpString(dataBuffer, StandardCharsets.UTF_8);

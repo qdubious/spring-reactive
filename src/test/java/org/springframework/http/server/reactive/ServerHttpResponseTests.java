@@ -27,7 +27,7 @@ import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 
 import org.springframework.core.io.buffer.DataBuffer;
-import org.springframework.core.io.buffer.DefaultDataBufferAllocator;
+import org.springframework.core.io.buffer.DefaultDataBufferFactory;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseCookie;
 
@@ -43,28 +43,28 @@ public class ServerHttpResponseTests {
 
 
 	@Test
-	public void setBody() throws Exception {
+	public void writeWith() throws Exception {
 		TestServerHttpResponse response = new TestServerHttpResponse();
-		response.setBody(Flux.just(wrap("a"), wrap("b"), wrap("c"))).get();
+		response.writeWith(Flux.just(wrap("a"), wrap("b"), wrap("c"))).get();
 
 		assertTrue(response.headersWritten);
 		assertTrue(response.cookiesWritten);
 
-		assertEquals(3, response.content.size());
-		assertEquals("a", new String(response.content.get(0).asByteBuffer().array(), UTF_8));
-		assertEquals("b", new String(response.content.get(1).asByteBuffer().array(), UTF_8));
-		assertEquals("c", new String(response.content.get(2).asByteBuffer().array(), UTF_8));
+		assertEquals(3, response.body.size());
+		assertEquals("a", new String(response.body.get(0).asByteBuffer().array(), UTF_8));
+		assertEquals("b", new String(response.body.get(1).asByteBuffer().array(), UTF_8));
+		assertEquals("c", new String(response.body.get(2).asByteBuffer().array(), UTF_8));
 	}
 
 	@Test
-	public void setBodyWithError() throws Exception {
+	public void writeWithError() throws Exception {
 		TestServerHttpResponse response = new TestServerHttpResponse();
 		IllegalStateException error = new IllegalStateException("boo");
-		response.setBody(Flux.error(error)).otherwise(ex -> Mono.empty()).get();
+		response.writeWith(Flux.error(error)).otherwise(ex -> Mono.empty()).get();
 
 		assertFalse(response.headersWritten);
 		assertFalse(response.cookiesWritten);
-		assertTrue(response.content.isEmpty());
+		assertTrue(response.body.isEmpty());
 	}
 
 	@Test
@@ -74,27 +74,27 @@ public class ServerHttpResponseTests {
 
 		assertTrue(response.headersWritten);
 		assertTrue(response.cookiesWritten);
-		assertTrue(response.content.isEmpty());
+		assertTrue(response.body.isEmpty());
 	}
 
 	@Test
-	public void beforeCommitWithSetBody() throws Exception {
+	public void beforeCommitWithComplete() throws Exception {
 		ResponseCookie cookie = ResponseCookie.from("ID", "123").build();
 		TestServerHttpResponse response = new TestServerHttpResponse();
 		response.beforeCommit(() -> {
 			response.getCookies().add(cookie.getName(), cookie);
 			return Mono.empty();
 		});
-		response.setBody(Flux.just(wrap("a"), wrap("b"), wrap("c"))).get();
+		response.writeWith(Flux.just(wrap("a"), wrap("b"), wrap("c"))).get();
 
 		assertTrue(response.headersWritten);
 		assertTrue(response.cookiesWritten);
 		assertSame(cookie, response.getCookies().getFirst("ID"));
 
-		assertEquals(3, response.content.size());
-		assertEquals("a", new String(response.content.get(0).asByteBuffer().array(), UTF_8));
-		assertEquals("b", new String(response.content.get(1).asByteBuffer().array(), UTF_8));
-		assertEquals("c", new String(response.content.get(2).asByteBuffer().array(), UTF_8));
+		assertEquals(3, response.body.size());
+		assertEquals("a", new String(response.body.get(0).asByteBuffer().array(), UTF_8));
+		assertEquals("b", new String(response.body.get(1).asByteBuffer().array(), UTF_8));
+		assertEquals("c", new String(response.body.get(2).asByteBuffer().array(), UTF_8));
 	}
 
 	@Test
@@ -102,16 +102,16 @@ public class ServerHttpResponseTests {
 		TestServerHttpResponse response = new TestServerHttpResponse();
 		IllegalStateException error = new IllegalStateException("boo");
 		response.beforeCommit(() -> Mono.error(error));
-		response.setBody(Flux.just(wrap("a"), wrap("b"), wrap("c"))).get();
+		response.writeWith(Flux.just(wrap("a"), wrap("b"), wrap("c"))).get();
 
 		assertTrue("beforeCommit action errors should be ignored", response.headersWritten);
 		assertTrue("beforeCommit action errors should be ignored", response.cookiesWritten);
 		assertNull(response.getCookies().get("ID"));
 
-		assertEquals(3, response.content.size());
-		assertEquals("a", new String(response.content.get(0).asByteBuffer().array(), UTF_8));
-		assertEquals("b", new String(response.content.get(1).asByteBuffer().array(), UTF_8));
-		assertEquals("c", new String(response.content.get(2).asByteBuffer().array(), UTF_8));
+		assertEquals(3, response.body.size());
+		assertEquals("a", new String(response.body.get(0).asByteBuffer().array(), UTF_8));
+		assertEquals("b", new String(response.body.get(1).asByteBuffer().array(), UTF_8));
+		assertEquals("c", new String(response.body.get(2).asByteBuffer().array(), UTF_8));
 	}
 
 	@Test
@@ -126,14 +126,14 @@ public class ServerHttpResponseTests {
 
 		assertTrue(response.headersWritten);
 		assertTrue(response.cookiesWritten);
-		assertTrue(response.content.isEmpty());
+		assertTrue(response.body.isEmpty());
 		assertSame(cookie, response.getCookies().getFirst("ID"));
 	}
 
 
 
 	private DataBuffer wrap(String a) {
-		return new DefaultDataBufferAllocator().wrap(ByteBuffer.wrap(a.getBytes(UTF_8)));
+		return new DefaultDataBufferFactory().wrap(ByteBuffer.wrap(a.getBytes(UTF_8)));
 	}
 
 
@@ -143,10 +143,10 @@ public class ServerHttpResponseTests {
 
 		private boolean cookiesWritten;
 
-		private final List<DataBuffer> content = new ArrayList<>();
+		private final List<DataBuffer> body = new ArrayList<>();
 
 		public TestServerHttpResponse() {
-			super(new DefaultDataBufferAllocator());
+			super(new DefaultDataBufferFactory());
 		}
 
 		@Override
@@ -166,9 +166,9 @@ public class ServerHttpResponseTests {
 		}
 
 		@Override
-		protected Mono<Void> setBodyInternal(Publisher<DataBuffer> publisher) {
-			return Flux.from(publisher).map(b -> {
-				this.content.add(b);
+		protected Mono<Void> writeWithInternal(Publisher<DataBuffer> body) {
+			return Flux.from(body).map(b -> {
+				this.body.add(b);
 				return b;
 			}).then();
 		}
