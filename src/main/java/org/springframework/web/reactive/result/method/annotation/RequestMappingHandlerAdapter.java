@@ -17,9 +17,7 @@
 package org.springframework.web.reactive.result.method.annotation;
 
 import java.lang.reflect.Method;
-import java.nio.ByteBuffer;
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
@@ -34,16 +32,9 @@ import org.springframework.beans.factory.BeanFactoryAware;
 import org.springframework.beans.factory.InitializingBean;
 import org.springframework.beans.factory.config.ConfigurableBeanFactory;
 import org.springframework.core.codec.support.ByteBufferDecoder;
-import org.springframework.core.codec.support.ByteBufferEncoder;
-import org.springframework.core.codec.support.JacksonJsonDecoder;
-import org.springframework.core.codec.support.JacksonJsonEncoder;
-import org.springframework.core.codec.support.Jaxb2Decoder;
-import org.springframework.core.codec.support.Jaxb2Encoder;
-import org.springframework.core.codec.support.JsonObjectDecoder;
 import org.springframework.core.codec.support.StringDecoder;
-import org.springframework.core.codec.support.StringEncoder;
 import org.springframework.core.convert.ConversionService;
-import org.springframework.core.convert.support.DefaultConversionService;
+import org.springframework.format.support.DefaultFormattingConversionService;
 import org.springframework.http.converter.reactive.CodecHttpMessageConverter;
 import org.springframework.http.converter.reactive.HttpMessageConverter;
 import org.springframework.ui.ExtendedModelMap;
@@ -59,6 +50,8 @@ import org.springframework.web.server.ServerWebExchange;
 
 
 /**
+ * Supports the invocation of {@code @RequestMapping} methods.
+ *
  * @author Rossen Stoyanchev
  */
 public class RequestMappingHandlerAdapter implements HandlerAdapter, BeanFactoryAware, InitializingBean {
@@ -66,24 +59,46 @@ public class RequestMappingHandlerAdapter implements HandlerAdapter, BeanFactory
 	private static Log logger = LogFactory.getLog(RequestMappingHandlerAdapter.class);
 
 
-	private final List<HandlerMethodArgumentResolver> argumentResolvers = new ArrayList<>();
+	private List<HandlerMethodArgumentResolver> customArgumentResolvers;
 
-	private ConversionService conversionService = new DefaultConversionService();
+	private List<HandlerMethodArgumentResolver> argumentResolvers;
 
-	private final Map<Class<?>, ExceptionHandlerMethodResolver> exceptionHandlerCache =
-			new ConcurrentHashMap<>(64);
+	private final List<HttpMessageConverter<?>> messageConverters = new ArrayList<>(10);
+
+	private ConversionService conversionService = new DefaultFormattingConversionService();
 
 	private ConfigurableBeanFactory beanFactory;
 
+	private final Map<Class<?>, ExceptionHandlerMethodResolver> exceptionHandlerCache = new ConcurrentHashMap<>(64);
 
+
+
+	public RequestMappingHandlerAdapter() {
+		this.messageConverters.add(new CodecHttpMessageConverter<>(new ByteBufferDecoder()));
+		this.messageConverters.add(new CodecHttpMessageConverter<>(new StringDecoder()));
+	}
+
+
+	/**
+	 * Provide custom argument resolvers without overriding the built-in ones.
+	 */
+	public void setCustomArgumentResolvers(List<HandlerMethodArgumentResolver> argumentResolvers) {
+		this.customArgumentResolvers = argumentResolvers;
+	}
+
+	/**
+	 * Return the custom argument resolvers.
+	 */
+	public List<HandlerMethodArgumentResolver> getCustomArgumentResolvers() {
+		return this.customArgumentResolvers;
+	}
 
 	/**
 	 * Configure the complete list of supported argument types thus overriding
 	 * the resolvers that would otherwise be configured by default.
 	 */
 	public void setArgumentResolvers(List<HandlerMethodArgumentResolver> resolvers) {
-		this.argumentResolvers.clear();
-		this.argumentResolvers.addAll(resolvers);
+		this.argumentResolvers = new ArrayList<>(resolvers);
 	}
 
 	/**
@@ -93,10 +108,35 @@ public class RequestMappingHandlerAdapter implements HandlerAdapter, BeanFactory
 		return this.argumentResolvers;
 	}
 
+	/**
+	 * Configure message converters to read the request body with.
+	 */
+	public void setMessageConverters(List<HttpMessageConverter<?>> messageConverters) {
+		this.messageConverters.clear();
+		this.messageConverters.addAll(messageConverters);
+	}
+
+	/**
+	 * Return the configured message converters.
+	 */
+	public List<HttpMessageConverter<?>> getMessageConverters() {
+		return this.messageConverters;
+	}
+
+	/**
+	 * Configure a ConversionService for type conversion of controller method
+	 * arguments as well as for converting from different async types to
+	 * {@code Flux} and {@code Mono}.
+	 *
+	 * TODO: this may be replaced by DataBinder
+	 */
 	public void setConversionService(ConversionService conversionService) {
 		this.conversionService = conversionService;
 	}
 
+	/**
+	 * Return the configured ConversionService.
+	 */
 	public ConversionService getConversionService() {
 		return this.conversionService;
 	}
@@ -113,41 +153,45 @@ public class RequestMappingHandlerAdapter implements HandlerAdapter, BeanFactory
 	}
 
 	public ConfigurableBeanFactory getBeanFactory() {
-		return beanFactory;
+		return this.beanFactory;
 	}
 
 
 	@Override
 	public void afterPropertiesSet() throws Exception {
-		if (ObjectUtils.isEmpty(this.argumentResolvers)) {
-
-			List<HttpMessageConverter<?>> converters = Arrays.asList(
-					new CodecHttpMessageConverter<ByteBuffer>(new ByteBufferEncoder(), new ByteBufferDecoder()),
-					new CodecHttpMessageConverter<String>(new StringEncoder(), new StringDecoder()),
-					new CodecHttpMessageConverter<Object>(new Jaxb2Encoder(), new Jaxb2Decoder()),
-					new CodecHttpMessageConverter<Object>(new JacksonJsonEncoder(),
-							new JacksonJsonDecoder(new JsonObjectDecoder())));
-
-			// Annotation-based argument resolution
-			ConversionService cs = getConversionService();
-			this.argumentResolvers.add(new RequestParamMethodArgumentResolver(cs, getBeanFactory(), false));
-			this.argumentResolvers.add(new RequestParamMapMethodArgumentResolver());
-			this.argumentResolvers.add(new PathVariableMethodArgumentResolver(cs, getBeanFactory()));
-			this.argumentResolvers.add(new PathVariableMapMethodArgumentResolver());
-			this.argumentResolvers.add(new RequestBodyArgumentResolver(converters, cs));
-			this.argumentResolvers.add(new RequestHeaderMethodArgumentResolver(cs, getBeanFactory()));
-			this.argumentResolvers.add(new RequestHeaderMapMethodArgumentResolver());
-			this.argumentResolvers.add(new CookieValueMethodArgumentResolver(cs, getBeanFactory()));
-			this.argumentResolvers.add(new ExpressionValueMethodArgumentResolver(cs, getBeanFactory()));
-			this.argumentResolvers.add(new SessionAttributeMethodArgumentResolver(cs, getBeanFactory()));
-			this.argumentResolvers.add(new RequestAttributeMethodArgumentResolver(cs , getBeanFactory()));
-
-			// Type-based argument resolution
-			this.argumentResolvers.add(new ModelArgumentResolver());
-
-			// Catch-all
-			this.argumentResolvers.add(new RequestParamMethodArgumentResolver(cs, getBeanFactory(), true));
+		if (this.argumentResolvers == null) {
+			this.argumentResolvers = initArgumentResolvers();
 		}
+	}
+
+	protected List<HandlerMethodArgumentResolver> initArgumentResolvers() {
+		List<HandlerMethodArgumentResolver> resolvers = new ArrayList<>();
+
+		// Annotation-based argument resolution
+		ConversionService cs = getConversionService();
+		resolvers.add(new RequestParamMethodArgumentResolver(cs, getBeanFactory(), false));
+		resolvers.add(new RequestParamMapMethodArgumentResolver());
+		resolvers.add(new PathVariableMethodArgumentResolver(cs, getBeanFactory()));
+		resolvers.add(new PathVariableMapMethodArgumentResolver());
+		resolvers.add(new RequestBodyArgumentResolver(getMessageConverters(), cs));
+		resolvers.add(new RequestHeaderMethodArgumentResolver(cs, getBeanFactory()));
+		resolvers.add(new RequestHeaderMapMethodArgumentResolver());
+		resolvers.add(new CookieValueMethodArgumentResolver(cs, getBeanFactory()));
+		resolvers.add(new ExpressionValueMethodArgumentResolver(cs, getBeanFactory()));
+		resolvers.add(new SessionAttributeMethodArgumentResolver(cs, getBeanFactory()));
+		resolvers.add(new RequestAttributeMethodArgumentResolver(cs , getBeanFactory()));
+
+		// Type-based argument resolution
+		resolvers.add(new ModelArgumentResolver());
+
+		// Custom resolvers
+		if (getCustomArgumentResolvers() != null) {
+			resolvers.addAll(getCustomArgumentResolvers());
+		}
+
+		// Catch-all
+		resolvers.add(new RequestParamMethodArgumentResolver(cs, getBeanFactory(), true));
+		return resolvers;
 	}
 
 	@Override
@@ -159,7 +203,7 @@ public class RequestMappingHandlerAdapter implements HandlerAdapter, BeanFactory
 	public Mono<HandlerResult> handle(ServerWebExchange exchange, Object handler) {
 		HandlerMethod handlerMethod = (HandlerMethod) handler;
 		InvocableHandlerMethod invocable = new InvocableHandlerMethod(handlerMethod);
-		invocable.setHandlerMethodArgumentResolvers(this.argumentResolvers);
+		invocable.setHandlerMethodArgumentResolvers(getArgumentResolvers());
 		ModelMap model = new ExtendedModelMap();
 		return invocable.invokeForRequest(exchange, model)
 				.map(result -> result.setExceptionHandler(ex -> handleException(ex, handlerMethod, exchange)))

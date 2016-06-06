@@ -75,7 +75,7 @@ public class InvocableHandlerMethodTests {
 		InvocableHandlerMethod hm = createHandlerMethod("noArgs");
 
 		Mono<HandlerResult> mono = hm.invokeForRequest(this.exchange, this.model);
-		HandlerResult value = mono.get();
+		HandlerResult value = mono.block();
 
 		assertNotNull(value);
 		assertEquals("success", value.getReturnValue().get());
@@ -90,7 +90,7 @@ public class InvocableHandlerMethodTests {
 				new RequestParamMethodArgumentResolver(new GenericConversionService(), null, false)));
 
 		Mono<HandlerResult> mono = hm.invokeForRequest(this.exchange, this.model);
-		HandlerResult value = mono.get();
+		HandlerResult value = mono.block();
 
 		assertNotNull(value);
 		assertEquals("success:null", value.getReturnValue().get());
@@ -102,7 +102,7 @@ public class InvocableHandlerMethodTests {
 		addResolver(hm, Mono.just("value1"));
 
 		Mono<HandlerResult> mono = hm.invokeForRequest(this.exchange, this.model);
-		HandlerResult value = mono.get();
+		HandlerResult value = mono.block();
 
 		assertNotNull(value);
 		assertEquals("success:value1", value.getReturnValue().get());
@@ -114,7 +114,7 @@ public class InvocableHandlerMethodTests {
 		addResolver(hm, Flux.fromIterable(Arrays.asList("value1", "value2", "value3")));
 
 		Mono<HandlerResult> mono = hm.invokeForRequest(this.exchange, this.model);
-		HandlerResult value = mono.get();
+		HandlerResult value = mono.block();
 
 		assertNotNull(value);
 		assertEquals("success:value1", value.getReturnValue().get());
@@ -204,7 +204,7 @@ public class InvocableHandlerMethodTests {
 	}
 
 	private Throwable awaitErrorSignal(Publisher<?> publisher) throws Exception {
-		Signal<?> signal = Flux.from(publisher).materialize().toList().get().get(0);
+		Signal<?> signal = Flux.from(publisher).materialize().collectList().block().get(0);
 		assertEquals("Unexpected signal: " + signal, SignalKind.onError, signal.getType());
 		return signal.getThrowable();
 	}
